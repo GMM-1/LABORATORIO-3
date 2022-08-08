@@ -1,0 +1,194 @@
+; *****************************************************************************
+; Universidad del Valle de Guatemala
+; IE2023 Programación de microcontroladores
+; Autor: Gabriel Andrade 
+; compilador: PIC-As (v2.36), MPLAB X IDE (v6.00)
+; proyecto: contador AUTOMATICO
+; hardware: PIC 16F887 
+; creado: 01/08/2022
+; última modificación: 25-07-2022
+;*******************************************************************************
+PROCESSOR 16F887
+#include <xc.inc>
+;*******************************************************************************
+;palabra de configuración
+;*******************************************************************************
+; CONFIG1 
+  CONFIG FOSC = INTRC_NOCLKOUT
+  CONFIG WDTE = OFF
+  CONFIG PWRTE = ON
+  CONFIG MCLRE = OFF
+  CONFIG CP = OFF
+  CONFIG CPD = OFF
+  CONFIG BOREN = OFF
+  CONFIG IESO = OFF
+  CONFIG FCMEN = OFF
+  CONFIG LVP = ON
+  
+; CONFIG2
+  CONFIG BOR4V = BOR40V
+  CONFIG WRT = OFF
+  
+;*******************************************************************************
+; variables 
+;*******************************************************************************
+PSECT udata_bank0
+ contador:
+    DS 1
+ bandera:
+    DS 1  
+;******************************************************************************* 
+; Vector Reset    
+;******************************************************************************* 
+PSECT CODE, delta=2, abs
+ ORG 0x0000
+    goto MAIN
+;******************************************************************************* 
+; Código Principal    
+;******************************************************************************* 
+PSECT CODE, delta=2, abs
+ ORG 0x0100
+ 
+;DISPLAY
+CONFG_DISPLAY: 
+    CLRF PCLATH 
+    BSF PCLATH, 0 
+    ADDWF PCL, F
+    RETLW 3Fh
+    RETLW 06h
+    RETLW 5Bh
+    RETLW 4Fh
+    RETLW 66h
+    RETLW 6Dh 
+    RETLW 7Dh
+    RETLW 07h
+    RETLW 7Fh 
+    RETLW 6Fh
+    RETLW 77h
+    RETLW 7Ch
+    RETLW 39h
+    RETLW 5Eh
+    RETLW 79h
+    RETLW 71h 
+    
+MAIN:
+    ;CONFIGURACIONES INICIALES 
+    CALL CONFG_PIN
+    CALL CONFG_CLOCK
+    CALL CONFG_TM0
+    
+    CLRF PORTA
+    CLRF PORTB
+    CLRF PORTD
+    MOVLW 3Fh
+    MOVWF PORTC
+    MOVLW 00h
+    MOVWF contador
+    MOVLW 16
+    MOVWF bandera
+    
+loop: 
+    CALL CONT_7S
+    CALL CLOCK_500MS
+    CALL CONDICIONAL 
+    GOTO loop
+
+; CODIGOS AUXILIARES
+;CONFIGURACIÓN DE ENTRADAS Y SALIDAS
+CONFG_PIN:
+    ;PONER LOS PINES EN CONFIGURACION DIGITAL
+    BANKSEL ANSEL
+    CLRF ANSEL 
+    CLRF ANSELH
+    
+    ;CONFIGURACION DE ENTRADAS
+    BANKSEL TRISA
+    MOVLW 03h
+    MOVWF TRISA
+    
+    ;CONFIGURACION DE SALIDAS
+    CLRF TRISB
+    CLRF TRISC
+    CLRF TRISD
+    RETURN 
+    
+CONFG_CLOCK: 
+    ;RELOJ CONFIGURADO EN 250 KHZ
+    BCF IRCF2
+    BSF IRCF1
+    BCF IRCF0
+    
+CONFG_TM0: 
+    ;RELOJ INTERNO
+    BCF T0CS
+    ;PRESCALER EN 256:1
+    BCF PSA
+    BSF PS2
+    BSF PS1 
+    BSF PS0
+    
+    BANKSEL PORTA
+    CALL TM0_RESETEO 
+    RETURN 
+    
+TM0_RESETEO: 
+    ; N CALCULADO 
+    MOVLW 134 
+    MOVWF TMR0 
+    BCF T0IF
+    RETURN
+    
+CLOCK_500MS:
+    ; temporizador automatico de 500 ms 
+    BTFSS T0IF
+    GOTO $-1
+    CALL TM0_RESETEO
+    INCF PORTB
+    RETURN
+        
+CONT_7S: 
+    BTFSC PORTA,0
+    CALL INC_CONT7S 
+    BTFSC PORTA,1 
+    
+    CALL DEC_CONT7S
+    MOVF contador, W ; se guarda el valor en una variable
+    CALL CONFG_DISPLAY
+    MOVWF PORTC ; SE TRASLADA EL VALOR A PORTC
+    RETURN 
+    
+INC_CONT7S: 
+    BTFSC PORTA, 0 
+    GOTO $-1
+    INCF contador, F
+    BTFSC contador, 4
+    CLRF INC_0AF
+    RETURN 
+    
+DEC_CONT7S: 
+    BTFSC PORTA,1
+    GOTO $-1
+    DECF contador, F
+    BTFSC contador, 4
+    CALL INC_0AF
+    RETURN 
+    
+INC_0AF: 
+    MOVLW 0Fh
+    MOVWF contador
+    RETURN 
+    
+CONDICIONAL: 
+    MOVF PORTB, W
+    XORWF contador, W
+    SUBWF bandera, W
+    MOVWF PORTD
+    BTFSC PORTD, 4
+    CALL CONT_0
+    RETURN
+    
+    CONT_0: 
+    CLRF PORTB 
+    CALL TM0_RESETEO
+    RETURN
+END
